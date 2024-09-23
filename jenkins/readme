@@ -1,0 +1,3 @@
+# Testing environment purposes
+To avoid using an Nginx reverse proxy and to speed up the process, you can use Ngrok to expose your local Jenkins instance.
+https://ngrok.com/docs/getting-started/
