@@ -1,2 +1,2 @@
 # CI-CD Tools
-CI/CD setup files
+CI/CD stacks utilized in different projects.
