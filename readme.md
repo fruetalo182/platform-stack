@@ -1,2 +1,2 @@
-# CI-CD Tools
-CI/CD stacks utilized in different projects.
+# Platform Stack
+Platform stack utilized in different projects.
