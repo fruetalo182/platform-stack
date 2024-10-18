@@ -1,7 +1,7 @@
 # Platform Stack
 Platform stack utilized in different projects.
 
-### This repository will provide useful kubernetes tools consumed by ArgoCD (*not all of them*) in desired state.
+#### This repository will provide useful kubernetes tools consumed by ArgoCD (*not all of them*) in desired state.
 ___
 
 #### ArgoCD apps file structure
