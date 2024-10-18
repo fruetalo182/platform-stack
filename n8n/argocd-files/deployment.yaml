@@ -1,0 +1,53 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: n8n-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      annotations:
+        sidecar.opentelemetry.io/inject: "monitoring/otel-collector-sidecar"
+        instrumentation.opentelemetry.io/inject-nodejs: "monitoring/auto-instrumentation"
+      labels:
+        app: n8n
+    spec:
+      nodeSelector:
+        eks.amazonaws.com/nodegroup: t1_group
+      containers:
+      - name: n8n
+      #Version imagen n8n actual
+        image: n8nio/n8n:1.50.1
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: "300Mi"
+            cpu: "400m"
+          limits:
+            memory: "5120Mi"
+            cpu: "2000m"
+        envFrom:
+        - secretRef:
+            name: n8n-prod
+        ports:
+        - containerPort: 5678
+      - name: gotenberg
+        image: gotenberg/gotenberg:7
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        securityContext:
+          privileged: false
+          runAsUser: 1001
+        resources:
+          requests:
+            memory: "200Mi"
+            cpu: "200m"
+          limits:
+            memory: "400Mi"
+            cpu: "400m"

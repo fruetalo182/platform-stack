@@ -1,0 +1,165 @@
+envFromSecret: grafana-datasources-creds-prod
+
+# Usamos mismo secret que para datasources para ahorrar :)
+admin:
+  existingSecret: grafana-datasources-creds-prod
+  userKey: admin-user
+  passwordKey: admin-pass
+
+service:
+  portName: http-web
+  type: NodePort
+
+extraSecretMounts:
+- name: grafana-ini-secret-mount
+  secretName: grafana-ini
+  defaultMode: 0440
+  mountPath: /etc/secrets/grafana-ini
+  readOnly: true
+
+plugins:
+  - alexanderzobnin-zabbix-app
+  - marcusolsson-json-datasource
+
+grafana.ini:
+  server:
+    root_url: $__file{/etc/secrets/grafana-ini/server.url}
+  database:
+    type: $__file{/etc/secrets/grafana-ini/database.type}
+    host: $__file{/etc/secrets/grafana-ini/database.host}
+    name: $__file{/etc/secrets/grafana-ini/database.name}
+    user: $__file{/etc/secrets/grafana-ini/database.user}
+    password: $__file{/etc/secrets/grafana-ini/database.password}
+    ssl_mode: $__file{/etc/secrets/grafana-ini/database.ssl_mode}
+  auth.anonymous:
+    enabled: true
+    hide_version: true
+    org_name: Public
+    org_role: Viewer
+  dataproxy:
+    timeout: 300s
+
+sidecar:
+  datasources:
+    enabled: false
+    defaultDatasourceEnabled: false
+    isDefaultDatasource: false
+    alertmanager:
+      enabled: false
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Loki
+      type: loki
+      access: proxy
+      orgId: 1
+      editable: true
+      url: http://loki-gateway:80
+      basicAuth: false
+      isDefault: false
+      version: 1
+      apiVersion: 1
+      jsonData:
+        timeout: 600
+        maxLines: 5000
+        derivedFields:
+          - datasourceUid: tempo
+            matcherRegex: trace_id":"(\w+)
+            name: TraceID
+            url: $${__value.raw}
+            urlDisplayLabel: 'View trace'
+          - datasourceUid: tempo
+            matcherRegex: trace_id=(\w+)
+            name: traceID
+            url: $${__value.raw}
+            urlDisplayLabel: 'View trace'
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      orgId: 1
+      url: http://prometheus-operated:9090
+      basicAuth: false
+      isDefault: false
+      version: 1
+      editable: false
+    - name: Tempo
+      type: tempo
+      access: proxy
+      orgId: 1
+      url: http://tempo:3100
+      basicAuth: false
+      isDefault: false
+      version: 1
+      editable: true
+      apiVersion: 1
+      uid: tempo
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: 'Loki'
+          spanStartTimeShift: '1h'
+          spanEndTimeShift: '-1h'
+          tags: [{ key: 'k8s.container.name', value: 'container' }]
+          filterByTraceID: false
+          filterBySpanID: false
+          customQuery: true
+          query: '{$${__tags}} |="$${__span.traceId}"'
+        tracesToMetrics:
+          datasourceUid: 'Prometheus'
+          spanStartTimeShift: '1h'
+          spanEndTimeShift: '-1h'
+          tags: [{ key: 'service.name', value: 'service' }]
+          queries:
+            - name: 'Related metrics'
+              query: 'sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m]))'
+        serviceMap:
+          datasourceUid: 'Prometheus'
+        nodeGraph:
+          enabled: true
+        search:
+          hide: false
+        lokiSearch:
+          datasourceUid: 'Loki'
+        traceQuery:
+          timeShiftEnabled: true
+          spanStartTimeShift: '1h'
+          spanEndTimeShift: '-1h'
+        spanBar:
+          type: 'Tag'
+          tag: 'http.path'
+    - name: Jira-JSON-API
+      uid: Jira-JSON-API
+      type: marcusolsson-json-datasource
+      access: proxy
+      editable: false
+      orgId: 3
+      basicAuth: true
+      basicAuthUser: ${jira.json.api.user}
+      secureJsonData:
+        basicAuthPassword: ${jira.json.api.pass}
+      isDefault: false
+      url: https://peyaplanning.atlassian.net/
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:region:account-number:certificate/certificate-id
+    external-dns.alpha.kubernetes.io/hostname: grafana.enlace.app
+    alb.ingress.kubernetes.io/inbound-cidrs: 10.1.0.0/16, 103.21.244.0/22, 103.22.200.0/22, 103.31.4.0/22, 104.16.0.0/12, 108.162.192.0/18, 131.0.72.0/22, 141.101.64.0/18, 162.158.0.0/15, 172.64.0.0/13, 173.245.48.0/20, 188.114.96.0/20, 190.93.240.0/20, 197.234.240.0/22, 198.41.128.0/17
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=600 # To fix gateway timeout in queries
+  labels: {}
+  hosts: []
+  path: "/"
+  tls: []

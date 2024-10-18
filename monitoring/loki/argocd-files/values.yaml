@@ -1,0 +1,105 @@
+deploymentMode: SimpleScalable
+
+serviceAccount:
+  create: true
+  name: loki-sa
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::account-number:role/loki-s3-role"
+
+loki:
+  auth_enabled: false
+
+  limits_config:
+    max_query_length: 0h  # to make queriable to any time
+    split_queries_by_interval: 12h
+    max_query_parallelism: 32
+    query_timeout: 300s
+    reject_old_samples: false
+    max_entries_limit_per_query: 25000
+
+  querier:
+    max_concurrent: 4 #x2 number of cores you want to use
+
+  server:
+    http_listen_port: 3100
+    grpc_listen_port: 9095
+    http_server_read_timeout: 600s
+    http_server_write_timeout: 600s
+
+  storage:
+    bucketNames:
+      chunks: loki-logs-prod
+    type: s3
+    s3:
+      s3: s3://region/loki-logs-prod
+      sse_encryption: true
+      s3ForcePathStyle: false
+
+  schemaConfig:
+    configs:
+      - from: 2024-04-29        # Date since this schema is going to be applied
+        schema: v13             # Schema version for Index and Chunk
+        store: tsdb             # Index store type
+        object_store: s3          
+        index:
+          period: 24h
+          prefix: loki_tsdb_index_
+
+chunksCache:
+  enabled: false
+
+resultsCache:
+  enabled: false
+
+write:
+  replicas: 2
+  resources: # SET
+    requests:
+      cpu: "250m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "500Mi"
+  persistence:
+    volumeClaimsEnabled: false
+
+read:
+  replicas: 4
+  resources: # SET
+    requests:
+      cpu: "250m"
+      memory: "128Mi"
+    limits:
+      cpu: 3
+      memory: "2Gi"
+
+backend:  # SET
+  replicas: 1
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "500Mi"
+  persistence:
+    volumeClaimsEnabled: false
+
+monitoring:
+  lokiCanary:
+    enabled: false
+
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  
+  serviceMonitor:
+    enabled: false 
+
+lokiCanary:
+  enabled: false
+
+test:
+  enabled: false
+
